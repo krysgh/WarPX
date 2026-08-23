@@ -21,7 +21,6 @@
             overflow: hidden;
         }
 
-        /* Painel Lateral */
         .sidebar {
             width: 360px;
             background: #1e293b;
@@ -144,7 +143,6 @@
             color: #fff;
         }
 
-        /* Área do Canvas */
         .main-content {
             flex: 1;
             display: flex;
@@ -179,7 +177,6 @@
             color: #10b981;
         }
 
-        /* Modal Customizado */
         .modal-backdrop {
             position: fixed;
             top: 0;
@@ -242,7 +239,6 @@
     <div class="sidebar">
         <h2>🛡️ WarPX Admin</h2>
 
-        <!-- Moderação -->
         <div class="card">
             <h3>Moderação por Seleção</h3>
             <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 10px;">Clique e arraste no canvas para
@@ -271,16 +267,14 @@
             <button class="btn-danger" onclick="openClearAllModal()">💥 Limpar Canvas Inteiro</button>
         </div>
 
-        <!-- Snapshots -->
         <div class="card">
             <h3>Snapshots (Backup)</h3>
             <button class="btn-secondary" onclick="saveSnapshot()">📸 Salvar Snapshot Atual</button>
             <button class="btn-warning" onclick="restoreSnapshot()">🔄 Restaurar Último Snapshot</button>
         </div>
 
-        <!-- Gerenciador de Bots -->
         <div class="card">
-            <h3>🤖 Gerenciador de Bots</h3>
+            <h3>Gerenciador de Bots</h3>
             <div class="grid-inputs">
                 <div>
                     <label>Qtd. Bots</label>
@@ -313,7 +307,6 @@
         <div class="status-bar" id="status">Conectando ao Painel...</div>
     </div>
 
-    <!-- Modal de Confirmação -->
     <div class="modal-backdrop" id="modal">
         <div class="modal-card">
             <div class="modal-title">⚠️ Reset Total do Canvas</div>
@@ -372,7 +365,6 @@
             document.getElementById("botStatus").innerText = `Bots Ativos: ${activeCount}`;
         });
 
-        // Eventos de Clique e Arrasto para Seleção de Região
         canvas.addEventListener("mousedown", (e) => {
             const rect = canvas.getBoundingClientRect();
             isDragging = true;
@@ -423,7 +415,6 @@
             oCtx.strokeRect(rx, ry, rw, rh);
         }
 
-        // Modais e Ações
         function openClearAllModal() { modal.classList.add("active"); }
         function closeClearAllModal() { modal.classList.remove("active"); }
 
