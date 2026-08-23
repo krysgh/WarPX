@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WarPX Mobile</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body {
+            background: #18181b;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            color: #00ffcc;
+        }
+
+        .canvas-wrapper {
+            overflow: auto;
+            max-width: 100%;
+            border: 2px solid #3f3f46;
+            border-radius: 8px;
+            background: #fff;
+            margin-bottom: 15px;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            cursor: crosshair;
+        }
+
+        .palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 320px;
+            margin-bottom: 15px;
+        }
+
+        .color-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #3f3f46;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .color-btn.selected {
+            border: 3px solid #fff;
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .cooldown-box {
+            width: 100%;
+            max-width: 320px;
+            text-align: center;
+            padding: 12px;
+            background: #27272a;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .cooldown-active {
+            color: #f43f5e;
+        }
+
+        .cooldown-ready {
+            color: #10b981;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>WarPX</h1>
+        <p style="font-size: 0.8rem; color: #a1a1aa;">Toque na grade para pintar um pixel</p>
+    </header>
+
+    <div class="canvas-wrapper">
+        <canvas id="canvas" width="300" height="300"></canvas>
+    </div>
+
+    <div class="palette" id="palette"></div>
+
+    <div class="cooldown-box cooldown-ready" id="cooldown-box">PRONTO PARA PINTAR</div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const cooldownBox = document.getElementById("cooldown-box");
+        const paletteContainer = document.getElementById("palette");
+
+        const colors = ["#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FF8800", "#8800FF"];
+        let selectedColor = colors[2];
+        let remainingSeconds = 0;
+        let cooldownTimer = null;
+
+        let canvasWidth = 100;
+        let canvasHeight = 100;
+        let pixelSize = canvas.width / canvasWidth;
+
+        // Montar Paleta
+        colors.forEach((color, idx) => {
+            const btn = document.createElement("button");
+            btn.className = `color-btn ${idx === 2 ? "selected" : ""}`;
+            btn.style.backgroundColor = color;
+            btn.onclick = () => {
+                document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("selected"));
+                btn.classList.add("selected");
+                selectedColor = color;
+            };
+            paletteContainer.appendChild(btn);
+        });
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/pixelHub")
+            .withAutomaticReconnect()
+            .build();
+
+        function renderAll(state) {
+            canvasWidth = state.width;
+            canvasHeight = state.height;
+            pixelSize = canvas.width / canvasWidth;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            state.pixels.forEach(p => {
+                ctx.fillStyle = p.hexColor;
+                ctx.fillRect(p.x * pixelSize, p.y * pixelSize, pixelSize, pixelSize);
+            });
+        }
+
+        function drawPixel(x, y, hexColor) {
+            ctx.fillStyle = hexColor;
+            ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+        }
+
+        connection.on("PixelUpdated", (pixel) => {
+            drawPixel(pixel.x, pixel.y, pixel.hexColor);
+        });
+
+        connection.on("PixelsBatchUpdated", (batch) => {
+            batch.forEach(p => drawPixel(p.x, p.y, p.hexColor));
+        });
+
+        connection.on("CanvasStateReset", (state) => renderAll(state));
+
+        function startCooldown(seconds) {
+            remainingSeconds = seconds;
+            cooldownBox.className = "cooldown-box cooldown-active";
+
+            clearInterval(cooldownTimer);
+            cooldownTimer = setInterval(() => {
+                remainingSeconds--;
+                if (remainingSeconds <= 0) {
+                    clearInterval(cooldownTimer);
+                    cooldownBox.className = "cooldown-box cooldown-ready";
+                    cooldownBox.innerText = "PRONTO PARA PINTAR";
+                } else {
+                    cooldownBox.innerText = `AGUARDE ${remainingSeconds}s`;
+                }
+            }, 1000);
+        }
+
+        canvas.addEventListener("click", async (e) => {
+            if (remainingSeconds > 0) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            const gridX = Math.floor(clickX / pixelSize);
+            const gridY = Math.floor(clickY / pixelSize);
+
+            try {
+                const result = await connection.invoke("PaintPixel", gridX, gridY, selectedColor);
+                if (result.success) {
+                    startCooldown(result.remainingCooldownSeconds);
+                } else {
+                    alert(result.errorMessage);
+                }
+            } catch (err) {
+                console.error("Erro ao pintar:", err);
+            }
+        });
+
+        async function init() {
+            await connection.start();
+            const state = await connection.invoke("GetCanvasState");
+            renderAll(state);
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

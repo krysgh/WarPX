@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WarPX - Painel Admin & Moderação</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0f172a;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Painel Lateral */
+        .sidebar {
+            width: 360px;
+            background: #1e293b;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            border-right: 1px solid #334155;
+            overflow-y: auto;
+        }
+
+        h2 {
+            font-size: 1.3rem;
+            color: #ef4444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .card h3 {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .grid-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .grid-inputs label {
+            font-size: 0.75rem;
+            color: #64748b;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .grid-inputs input {
+            width: 100%;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .input-full {
+            width: 100%;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: #000;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-secondary {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #2563eb;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+
+        .btn-ghost:hover {
+            background: #334155;
+            color: #fff;
+        }
+
+        /* Área do Canvas */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: #020617;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            border: 2px solid #334155;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        #selection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .status-bar {
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: #10b981;
+        }
+
+        /* Modal Customizado */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(2, 6, 23, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 999;
+        }
+
+        .modal-backdrop.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            color: #ef4444;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .modal-text {
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-actions button {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <h2>🛡️ WarPX Admin</h2>
+
+        <!-- Moderação -->
+        <div class="card">
+            <h3>Moderação por Seleção</h3>
+            <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 10px;">Clique e arraste no canvas para
+                selecionar uma área.</p>
+
+            <div class="grid-inputs">
+                <div>
+                    <label>X Inicial</label>
+                    <input type="number" id="startX" value="0" readonly>
+                </div>
+                <div>
+                    <label>Y Inicial</label>
+                    <input type="number" id="startY" value="0" readonly>
+                </div>
+                <div>
+                    <label>X Final</label>
+                    <input type="number" id="endX" value="0" readonly>
+                </div>
+                <div>
+                    <label>Y Final</label>
+                    <input type="number" id="endY" value="0" readonly>
+                </div>
+            </div>
+
+            <button class="btn-warning" onclick="clearSelectedRegion()">🧹 Limpar Área Selecionada</button>
+            <button class="btn-danger" onclick="openClearAllModal()">💥 Limpar Canvas Inteiro</button>
+        </div>
+
+        <!-- Snapshots -->
+        <div class="card">
+            <h3>Snapshots (Backup)</h3>
+            <button class="btn-secondary" onclick="saveSnapshot()">📸 Salvar Snapshot Atual</button>
+            <button class="btn-warning" onclick="restoreSnapshot()">🔄 Restaurar Último Snapshot</button>
+        </div>
+
+        <!-- Gerenciador de Bots -->
+        <div class="card">
+            <h3>🤖 Gerenciador de Bots</h3>
+            <div class="grid-inputs">
+                <div>
+                    <label>Qtd. Bots</label>
+                    <input type="number" id="botCount" value="10" min="1" max="100">
+                </div>
+                <div>
+                    <label>Delay (ms)</label>
+                    <input type="number" id="botDelay" value="50" min="1">
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 2px;">Cores Hex
+                    (separadas por vírgula)</label>
+                <input type="text" id="botColors" value="#FF0000,#00FF00,#0000FF,#FFFF00,#FF00FF" class="input-full">
+            </div>
+
+            <button class="btn-secondary" onclick="startBots()">▶️ Iniciar Bots</button>
+            <button class="btn-danger" onclick="stopBots()">⏹️ Parar Todos os Bots</button>
+
+            <p style="font-size: 0.8rem; color: #10b981; margin-top: 5px;" id="botStatus">Bots Ativos: 0</p>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="canvas-wrapper">
+            <canvas id="canvas" width="600" height="600"></canvas>
+            <canvas id="selection-overlay" width="600" height="600"></canvas>
+        </div>
+        <div class="status-bar" id="status">Conectando ao Painel...</div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div class="modal-backdrop" id="modal">
+        <div class="modal-card">
+            <div class="modal-title">⚠️ Reset Total do Canvas</div>
+            <div class="modal-text">Você tem certeza que deseja apagar <strong>TODOS</strong> os pixels do telão? Esta
+                ação não pode ser desfeita a menos que haja um snapshot recente.</div>
+            <div class="modal-actions">
+                <button class="btn-ghost" onclick="closeClearAllModal()">Cancelar</button>
+                <button class="btn-danger" onclick="confirmClearAll()">Sim, Apagar Tudo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const overlay = document.getElementById("selection-overlay");
+        const oCtx = overlay.getContext("2d");
+        const statusEl = document.getElementById("status");
+        const modal = document.getElementById("modal");
+
+        let canvasWidth = 100;
+        let canvasHeight = 100;
+        let pixelSize = canvas.width / canvasWidth;
+
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragEnd = { x: 0, y: 0 };
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/pixelHub")
+            .withAutomaticReconnect()
+            .build();
+
+        function renderAll(state) {
+            canvasWidth = state.width;
+            canvasHeight = state.height;
+            pixelSize = canvas.width / canvasWidth;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            state.pixels.forEach(p => {
+                ctx.fillStyle = p.hexColor;
+                ctx.fillRect(p.x * pixelSize, p.y * pixelSize, pixelSize, pixelSize);
+            });
+        }
+
+        function drawPixel(x, y, hexColor) {
+            ctx.fillStyle = hexColor;
+            ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+        }
+
+        connection.on("PixelUpdated", (pixel) => drawPixel(pixel.x, pixel.y, pixel.hexColor));
+        connection.on("PixelsBatchUpdated", (batch) => batch.forEach(p => drawPixel(p.x, p.y, p.hexColor)));
+        connection.on("CanvasStateReset", (state) => renderAll(state));
+
+        connection.on("BotStatusChanged", (activeCount) => {
+            document.getElementById("botStatus").innerText = `Bots Ativos: ${activeCount}`;
+        });
+
+        // Eventos de Clique e Arrasto para Seleção de Região
+        canvas.addEventListener("mousedown", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            isDragging = true;
+            dragStart = {
+                x: Math.floor((e.clientX - rect.left) / pixelSize),
+                y: Math.floor((e.clientY - rect.top) / pixelSize)
+            };
+            dragEnd = { ...dragStart };
+            updateSelection();
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            dragEnd = {
+                x: Math.min(canvasWidth - 1, Math.max(0, Math.floor((e.clientX - rect.left) / pixelSize))),
+                y: Math.min(canvasHeight - 1, Math.max(0, Math.floor((e.clientY - rect.top) / pixelSize)))
+            };
+            updateSelection();
+        });
+
+        window.addEventListener("mouseup", () => {
+            if (isDragging) isDragging = false;
+        });
+
+        function updateSelection() {
+            const sx = Math.min(dragStart.x, dragEnd.x);
+            const ex = Math.max(dragStart.x, dragEnd.x);
+            const sy = Math.min(dragStart.y, dragEnd.y);
+            const ey = Math.max(dragStart.y, dragEnd.y);
+
+            document.getElementById("startX").value = sx;
+            document.getElementById("startY").value = sy;
+            document.getElementById("endX").value = ex;
+            document.getElementById("endY").value = ey;
+
+            oCtx.clearRect(0, 0, overlay.width, overlay.height);
+            oCtx.strokeStyle = "#ef4444";
+            oCtx.lineWidth = 2;
+            oCtx.fillStyle = "rgba(239, 68, 68, 0.25)";
+
+            const rx = sx * pixelSize;
+            const ry = sy * pixelSize;
+            const rw = (ex - sx + 1) * pixelSize;
+            const rh = (ey - sy + 1) * pixelSize;
+
+            oCtx.fillRect(rx, ry, rw, rh);
+            oCtx.strokeRect(rx, ry, rw, rh);
+        }
+
+        // Modais e Ações
+        function openClearAllModal() { modal.classList.add("active"); }
+        function closeClearAllModal() { modal.classList.remove("active"); }
+
+        async function confirmClearAll() {
+            closeClearAllModal();
+            await connection.invoke("ClearRegion", 0, 0, canvasWidth - 1, canvasHeight - 1);
+            oCtx.clearRect(0, 0, overlay.width, overlay.height);
+            statusEl.innerText = "Canvas totalmente reiniciado!";
+        }
+
+        async function clearSelectedRegion() {
+            const sx = parseInt(document.getElementById("startX").value);
+            const sy = parseInt(document.getElementById("startY").value);
+            const ex = parseInt(document.getElementById("endX").value);
+            const ey = parseInt(document.getElementById("endY").value);
+
+            await connection.invoke("ClearRegion", sx, sy, ex, ey);
+            oCtx.clearRect(0, 0, overlay.width, overlay.height);
+            statusEl.innerText = `Região (${sx},${sy}) até (${ex},${ey}) limpa com sucesso!`;
+        }
+
+        async function saveSnapshot() {
+            await connection.invoke("SaveSnapshot");
+            statusEl.innerText = "Snapshot salvo em memória com sucesso!";
+        }
+
+        async function restoreSnapshot() {
+            const restored = await connection.invoke("RestoreSnapshot");
+            if (restored) statusEl.innerText = "Último snapshot restaurado!";
+            else alert("Nenhum snapshot encontrado em memória.");
+        }
+
+        async function startBots() {
+            const count = parseInt(document.getElementById("botCount").value);
+            const delayMs = parseInt(document.getElementById("botDelay").value);
+            const rawColors = document.getElementById("botColors").value;
+            const colors = rawColors.split(",").map(c => c.trim()).filter(c => c.length > 0);
+
+            await connection.invoke("StartBots", count, colors, delayMs);
+            statusEl.innerText = `${count} bots iniciados com sucesso!`;
+        }
+
+        async function stopBots() {
+            await connection.invoke("StopBots");
+            statusEl.innerText = "Todos os bots foram parados.";
+        }
+
+        async function init() {
+            try {
+                await connection.start();
+                statusEl.innerText = "● Painel Admin Conectado e Operacional";
+                const state = await connection.invoke("GetCanvasState");
+                renderAll(state);
+
+                const activeCount = await connection.invoke("GetActiveBotCount");
+                document.getElementById("botStatus").innerText = `Bots Ativos: ${activeCount}`;
+            } catch (err) {
+                statusEl.innerText = "Erro ao conectar o painel Admin.";
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

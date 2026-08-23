@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WarPX - Telão Ao Vivo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #020617;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .title {
+            font-size: 1.8rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #ef4444, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+        }
+
+        .canvas-container {
+            position: relative;
+            border: 3px solid #334155;
+            border-radius: 8px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #10b981;
+            letter-spacing: 1px;
+        }
+
+        /* Card do Placar - Guerra de Cores */
+        .leaderboard-card {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 18px;
+            width: 280px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            z-index: 10;
+        }
+
+        .leaderboard-title {
+            font-size: 0.95rem;
+            color: #f59e0b;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 800;
+        }
+
+        .color-rank-item {
+            margin-bottom: 10px;
+        }
+
+        .color-rank-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .color-badge {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            display: inline-block;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            margin-right: 6px;
+        }
+
+        .color-rank-bar-bg {
+            background: #1e293b;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .color-rank-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Placar de Guerra de Cores -->
+    <div class="leaderboard-card">
+        <div class="leaderboard-title">
+            <span>📊 Guerra de Cores</span>
+            <span style="font-size: 0.75rem; color: #64748b;">TOP 5</span>
+        </div>
+        <div id="leaderboard-list">
+            <div style="font-size: 0.8rem; color: #64748b; text-align: center;">Carregando estatísticas...</div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="canvas" width="650" height="650"></canvas>
+    </div>
+
+    <div class="status-bar" id="status">Conectando ao WarPX...</div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const statusEl = document.getElementById("status");
+        const leaderboardEl = document.getElementById("leaderboard-list");
+
+        let canvasWidth = 100;
+        let canvasHeight = 100;
+        let pixelSize = canvas.width / canvasWidth;
+
+        let pendingPixels = [];
+
+        // Estruturas de memória para cálculo em tempo real
+        let canvasGrid = [];
+        let colorCounts = {};
+        let lastLeaderboardUpdate = 0;
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/pixelHub")
+            .withAutomaticReconnect()
+            .build();
+
+        function renderAll(state) {
+            canvasWidth = state.width;
+            canvasHeight = state.height;
+            pixelSize = canvas.width / canvasWidth;
+
+            // Reinicia contadores
+            canvasGrid = new Array(canvasWidth * canvasHeight).fill("#0f172a");
+            colorCounts = {};
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            state.pixels.forEach(p => {
+                updatePixelInMemory(p.x, p.y, p.hexColor);
+                ctx.fillStyle = p.hexColor;
+                ctx.fillRect(p.x * pixelSize, p.y * pixelSize, pixelSize, pixelSize);
+            });
+
+            updateLeaderboardUI(true);
+        }
+
+        function updatePixelInMemory(x, y, newColor) {
+            const index = y * canvasWidth + x;
+            const oldColor = canvasGrid[index];
+
+            if (oldColor && colorCounts[oldColor]) {
+                colorCounts[oldColor]--;
+                if (colorCounts[oldColor] <= 0) delete colorCounts[oldColor];
+            }
+
+            canvasGrid[index] = newColor;
+            colorCounts[newColor] = (colorCounts[newColor] || 0) + 1;
+        }
+
+        // Recebimento em Lote ou Individual
+        connection.on("PixelsBatchUpdated", (batch) => {
+            batch.forEach(p => pendingPixels.push(p));
+        });
+
+        connection.on("PixelUpdated", (pixel) => {
+            pendingPixels.push(pixel);
+        });
+
+        connection.on("CanvasStateReset", (state) => {
+            pendingPixels = [];
+            renderAll(state);
+        });
+
+        // Loop principal de renderização e animação (~60 FPS)
+        function renderLoop() {
+            if (pendingPixels.length > 0) {
+                const batch = pendingPixels;
+                pendingPixels = [];
+
+                for (let i = 0; i < batch.length; i++) {
+                    const p = batch[i];
+                    updatePixelInMemory(p.x, p.y, p.hexColor);
+                    ctx.fillStyle = p.hexColor;
+                    ctx.fillRect(p.x * pixelSize, p.y * pixelSize, pixelSize, pixelSize);
+                }
+
+                updateLeaderboardUI();
+            }
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        // Atualiza a interface do Placar (Throttled para no máximo 3x por segundo)
+        function updateLeaderboardUI(force = false) {
+            const now = Date.now();
+            if (!force && now - lastLeaderboardUpdate < 300) return;
+            lastLeaderboardUpdate = now;
+
+            const totalPixels = canvasWidth * canvasHeight;
+            const sortedColors = Object.entries(colorCounts)
+                .map(([hex, count]) => ({
+                    hex,
+                    count,
+                    percent: ((count / totalPixels) * 100).toFixed(1)
+                }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5); // Exibe as 5 maiores cores
+
+            if (sortedColors.length === 0) return;
+
+            const topCount = sortedColors[0].count; // Referência da cor #1 para a barra proporcional
+
+            leaderboardEl.innerHTML = sortedColors.map((c, index) => {
+                const barWidth = Math.max(8, (c.count / topCount) * 100);
+                return `
+                    <div class="color-rank-item">
+                        <div class="color-rank-info">
+                            <span style="display:flex; align-items:center;">
+                                <span class="color-badge" style="background: ${c.hex};"></span>
+                                #${index + 1} <span style="font-size: 0.75rem; margin-left: 4px; color: #94a3b8;">${c.hex.toUpperCase()}</span>
+                            </span>
+                            <span>${c.percent}%</span>
+                        </div>
+                        <div class="color-rank-bar-bg">
+                            <div class="color-rank-bar-fill" style="width: ${barWidth}%; background: ${c.hex};"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function start() {
+            try {
+                await connection.start();
+                statusEl.innerText = "● AO VIVO - Acompanhe a guerra de cores";
+                statusEl.style.color = "#10b981";
+
+                const state = await connection.invoke("GetCanvasState");
+                renderAll(state);
+
+                requestAnimationFrame(renderLoop);
+            } catch (err) {
+                statusEl.innerText = "Erro ao conectar. Tentando novamente...";
+                setTimeout(start, 3000);
+            }
+        }
+
+        start();
+    </script>
+</body>
+
+</html>

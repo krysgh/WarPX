@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WarPX.Api/WarPX.Api.csproj" />
+    <Project Path="src/WarPX.Application/WarPX.Application.csproj" />
+    <Project Path="src/WarPX.Domain/WarPX.Domain.csproj" />
+    <Project Path="src/WarPX.Infrastructure/WarPX.Infrastructure.csproj" />
+    <Project Path="src/WarPX.Simulador/WarPX.Simulador.csproj" />
+  </Folder>
+</Solution>
