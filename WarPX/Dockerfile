@@ -3,8 +3,8 @@ WORKDIR /source
 
 COPY . .
 
-RUN dotnet restore "src/WarPX.Api/WarPX.Api.csproj"
-RUN dotnet publish "src/WarPX.Api/WarPX.Api.csproj" -c Release -o /app/publish
+RUN dotnet restore "WarPX/src/WarPX.Api/WarPX.Api.csproj"
+RUN dotnet publish "WarPX/src/WarPX.Api/WarPX.Api.csproj" -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
